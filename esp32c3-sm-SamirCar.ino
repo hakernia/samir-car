@@ -8,22 +8,31 @@ const char* apPassword = "12345678";
 WebServer server(80);
 
 // --- Stany kontrolek ---
-bool leftOn = false;
-bool rightOn = false;
-bool hazardOn = false;
+bool leftRequested = false;
+bool rightRequested = false;
+bool hazardRequested = false;
 bool highOn = false;
 bool lowOn = false;
 bool brakeOn = false;
 
-// --- Funkcje kontrolne ---
-void leftIndicator()   { leftOn = !leftOn; Serial.println(leftOn ? "Kierunkowskaz lewy ON" : "OFF"); }
-void rightIndicator()  { rightOn = !rightOn; Serial.println(rightOn ? "Kierunkowskaz prawy ON" : "OFF"); }
-void hazardLights()    { hazardOn = !hazardOn; Serial.println(hazardOn ? "Światła awaryjne ON" : "OFF"); }
-void highBeam()        { highOn = !highOn; Serial.println(highOn ? "Światła drogowe ON" : "OFF"); }
-void lowBeam()         { lowOn = !lowOn; Serial.println(lowOn ? "Światła mijania ON" : "OFF"); }
-void brakeLight()      { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "OFF"); }
+// --- Stany wyjściowe (do mrugania) ---
+bool leftOn = false;
+bool rightOn = false;
+bool hazardOn = false;
 
-// --- Strona HTML z JS do odpytywania stanu ---
+// --- Czas mrugania ---
+unsigned long lastBlink = 0;
+const unsigned long blinkInterval = 500; // 500ms = 1Hz
+
+// --- Funkcje kontrolne ---
+void toggleLeft()   { leftRequested = !leftRequested; Serial.println(leftRequested ? "Kierunkowskaz lewy WŁ." : "WYŁ."); }
+void toggleRight()  { rightRequested = !rightRequested; Serial.println(rightRequested ? "Kierunkowskaz prawy WŁ." : "WYŁ."); }
+void toggleHazard() { hazardRequested = !hazardRequested; Serial.println(hazardRequested ? "Światła awaryjne WŁ." : "WYŁ."); }
+void toggleHigh()   { highOn = !highOn; Serial.println(highOn ? "Światła drogowe WŁ." : "WYŁ."); }
+void toggleLow()    { lowOn = !lowOn; Serial.println(lowOn ? "Światła mijania WŁ." : "WYŁ."); }
+void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "OFF"); }
+
+// --- Strona HTML z JS ---
 void handleRoot() {
   String html = R"rawliteral(
   <!DOCTYPE html>
@@ -57,7 +66,6 @@ void handleRoot() {
         try {
           const resp = await fetch('/state');
           const data = await resp.json();
-          
           document.getElementById('left').className = data.left ? 'active' : '';
           document.getElementById('right').className = data.right ? 'active' : '';
           document.getElementById('hazard').className = data.hazard ? 'active' : '';
@@ -67,7 +75,7 @@ void handleRoot() {
         } catch (e) { console.log(e); }
       }
 
-      setInterval(updateState, 300); // odpytywanie co 300ms
+      setInterval(updateState, 200);
       updateState();
     </script>
   </body>
@@ -77,7 +85,7 @@ void handleRoot() {
   server.send(200, "text/html", html);
 }
 
-// --- API zwracające stan kontrolek w JSON ---
+// --- API JSON ---
 void handleState() {
   String json = "{";
   json += "\"left\":" + String(leftOn ? "true" : "false") + ",";
@@ -90,26 +98,23 @@ void handleState() {
   server.send(200, "application/json", json);
 }
 
-// --- Mapowanie ścieżek na funkcje ---
+// --- Mapowanie tras ---
 void setupRoutes() {
   server.on("/", handleRoot);
-  server.on("/left", [](){ leftIndicator(); server.send(200,"text/plain","OK"); });
-  server.on("/right", [](){ rightIndicator(); server.send(200,"text/plain","OK"); });
-  server.on("/hazard", [](){ hazardLights(); server.send(200,"text/plain","OK"); });
-  server.on("/high", [](){ highBeam(); server.send(200,"text/plain","OK"); });
-  server.on("/low", [](){ lowBeam(); server.send(200,"text/plain","OK"); });
-  server.on("/stop", [](){ brakeLight(); server.send(200,"text/plain","OK"); });
-  server.on("/state", handleState); // JSON ze stanem kontrolek
+  server.on("/left", [](){ toggleLeft(); server.send(200,"text/plain","OK"); });
+  server.on("/right", [](){ toggleRight(); server.send(200,"text/plain","OK"); });
+  server.on("/hazard", [](){ toggleHazard(); server.send(200,"text/plain","OK"); });
+  server.on("/high", [](){ toggleHigh(); server.send(200,"text/plain","OK"); });
+  server.on("/low", [](){ toggleLow(); server.send(200,"text/plain","OK"); });
+  server.on("/stop", [](){ toggleBrake(); server.send(200,"text/plain","OK"); });
+  server.on("/state", handleState);
 }
 
 void setup() {
   Serial.begin(115200);
-
-  // --- Uruchom AP ---
   WiFi.softAP(apSSID, apPassword);
   Serial.println("AP uruchomiony!");
-  Serial.print("IP AP: ");
-  Serial.println(WiFi.softAPIP());
+  Serial.print("IP AP: "); Serial.println(WiFi.softAPIP());
 
   setupRoutes();
   server.begin();
@@ -117,4 +122,21 @@ void setup() {
 
 void loop() {
   server.handleClient();
+
+  // --- Miganie co blinkInterval ---
+  unsigned long now = millis();
+  if (now - lastBlink >= blinkInterval) {
+    lastBlink = now;
+
+    // Światła awaryjne mrugają razem z kierunkami
+    if (hazardRequested) {
+      leftOn = !leftOn;
+      rightOn = leftOn;
+      hazardOn = leftOn;
+    } else {
+      hazardOn = false;
+      if (leftRequested) leftOn = !leftOn; else leftOn = false;
+      if (rightRequested) rightOn = !rightOn; else rightOn = false;
+    }
+  }
 }
