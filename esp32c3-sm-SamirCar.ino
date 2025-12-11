@@ -99,7 +99,6 @@ void handleRoot() {
   </html>
   )rawliteral";
 
-  server.send(200, "text/html", html);
   server.send(200, "text/html; charset=UTF-8", html);
 }
 
