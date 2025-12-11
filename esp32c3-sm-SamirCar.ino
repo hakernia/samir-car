@@ -15,16 +15,16 @@ bool highOn = false;
 bool lowOn = false;
 bool brakeOn = false;
 
-// --- Stany wyjściowe (do mrugania) ---
+// --- Stany wyjściowe (mruganie) ---
 bool leftOn = false;
 bool rightOn = false;
 bool hazardOn = false;
 
-// --- Czas mrugania ---
+// --- Mruganie ---
 unsigned long lastBlink = 0;
 const unsigned long blinkInterval = 500; // 500ms = 1Hz
 
-// --- Funkcje kontrolne ---
+// --- Funkcje toggle ---
 void toggleLeft()   { leftRequested = !leftRequested; Serial.println(leftRequested ? "Kierunkowskaz lewy WŁ." : "WYŁ."); }
 void toggleRight()  { rightRequested = !rightRequested; Serial.println(rightRequested ? "Kierunkowskaz prawy WŁ." : "WYŁ."); }
 void toggleHazard() { hazardRequested = !hazardRequested; Serial.println(hazardRequested ? "Światła awaryjne WŁ." : "WYŁ."); }
@@ -32,30 +32,46 @@ void toggleHigh()   { highOn = !highOn; Serial.println(highOn ? "Światła drogo
 void toggleLow()    { lowOn = !lowOn; Serial.println(lowOn ? "Światła mijania WŁ." : "WYŁ."); }
 void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "OFF"); }
 
-// --- Strona HTML z JS ---
+// --- Strona HTML ---
 void handleRoot() {
   String html = R"rawliteral(
   <!DOCTYPE html>
   <html>
   <head>
-    <title>Kontrolki samochodu</title>
+    <meta charset="UTF-8">
+    <title>Mini kokpit samochodu</title>
     <style>
-      body { font-family: Arial; text-align: center; margin-top: 50px; }
-      button { width: 150px; height: 50px; font-size: 16px; margin: 10px; }
-      .active { background-color: yellow; }
+      body { font-family: "Arial", "Verdana", "Tahoma", "Sans-Serif"; }
+      button {
+        width: 160px; height: 60px; font-size: 16px; margin: 10px; border: none; color: white; cursor: pointer;
+        border-radius: 8px;
+      }
+      .left { background-color: gray; }
+      .right { background-color: gray; }
+      .hazard { background-color: gray; }
+      .high { background-color: gray; }
+      .low { background-color: gray; }
+      .stop { background-color: gray; }
+      .active-left { background-color: orange; animation: blink 1s infinite; }
+      .active-right { background-color: orange; animation: blink 1s infinite; }
+      .active-hazard { background-color: orange; animation: blink 1s infinite; }
+      .active-high { background-color: white; color: black; }
+      .active-low { background-color: lightgray; color: black; }
+      .active-stop { background-color: red; }
+      @keyframes blink { 50% { opacity: 0; } 100% { opacity: 1; } }
     </style>
   </head>
   <body>
-    <h1>Symulator kontrolek samochodu</h1>
-    <button id="left" onclick="toggle('left')">Kierunkowskaz lewy</button>
-    <button id="right" onclick="toggle('right')">Kierunkowskaz prawy</button>
+    <h1>Mini kokpit samochodu</h1>
+    <button id="left" class="left" onclick="toggle('left')">Kierunkowskaz lewy</button>
+    <button id="right" class="right" onclick="toggle('right')">Kierunkowskaz prawy</button>
     <br>
-    <button id="hazard" onclick="toggle('hazard')">Światła awaryjne</button>
+    <button id="hazard" class="hazard" onclick="toggle('hazard')">Światła awaryjne</button>
     <br>
-    <button id="high" onclick="toggle('high')">Światła drogowe</button>
-    <button id="low" onclick="toggle('low')">Światła mijania</button>
+    <button id="high" class="high" onclick="toggle('high')">Światła drogowe</button>
+    <button id="low" class="low" onclick="toggle('low')">Światła mijania</button>
     <br>
-    <button id="stop" onclick="toggle('stop')">Stop / Hamulec</button>
+    <button id="stop" class="stop" onclick="toggle('stop')">Stop / Hamulec</button>
 
     <script>
       function toggle(control) {
@@ -66,13 +82,14 @@ void handleRoot() {
         try {
           const resp = await fetch('/state');
           const data = await resp.json();
-          document.getElementById('left').className = data.left ? 'active' : '';
-          document.getElementById('right').className = data.right ? 'active' : '';
-          document.getElementById('hazard').className = data.hazard ? 'active' : '';
-          document.getElementById('high').className = data.high ? 'active' : '';
-          document.getElementById('low').className = data.low ? 'active' : '';
-          document.getElementById('stop').className = data.brake ? 'active' : '';
-        } catch (e) { console.log(e); }
+
+          document.getElementById('left').className = data.left ? 'active-left' : 'left';
+          document.getElementById('right').className = data.right ? 'active-right' : 'right';
+          document.getElementById('hazard').className = data.hazard ? 'active-hazard' : 'hazard';
+          document.getElementById('high').className = data.high ? 'active-high' : 'high';
+          document.getElementById('low').className = data.low ? 'active-low' : 'low';
+          document.getElementById('stop').className = data.brake ? 'active-stop' : 'stop';
+        } catch(e){ console.log(e); }
       }
 
       setInterval(updateState, 200);
@@ -83,6 +100,7 @@ void handleRoot() {
   )rawliteral";
 
   server.send(200, "text/html", html);
+  server.send(200, "text/html; charset=UTF-8", html);
 }
 
 // --- API JSON ---
@@ -123,12 +141,11 @@ void setup() {
 void loop() {
   server.handleClient();
 
-  // --- Miganie co blinkInterval ---
+  // --- Miganie ---
   unsigned long now = millis();
   if (now - lastBlink >= blinkInterval) {
     lastBlink = now;
 
-    // Światła awaryjne mrugają razem z kierunkami
     if (hazardRequested) {
       leftOn = !leftOn;
       rightOn = leftOn;
