@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <FastLED.h>
 
 // --- Access Point ---
 const char* apSSID = "SamirCar";
@@ -23,6 +24,116 @@ bool hazardOn = false;
 // --- Mruganie ---
 unsigned long lastBlink = 0;
 const unsigned long blinkInterval = 500; // 500ms = 1Hz
+
+
+
+
+#define NUM_LEDS 32
+#define LED_PIN  4   // bezpieczny pin na C3
+
+#define LEFT_REAR_START   0
+#define RIGHT_REAR_START  3
+#define DIR_REAR_SIZE     1
+#define BRAKE_REAR_START  0
+#define BRAKE_REAR_SIZE   4
+
+#define LEFT_FRONT_START  16
+#define RIGHT_FRONT_START 24
+#define LIGHT_SIZE        4
+
+#define TURN_COLOR    CRGB(255, 120, 0)   // pomarańcz
+#define TAIL_COLOR    CRGB(80, 0, 0)      // ciemna czerwień
+#define BRAKE_COLOR   CRGB(255, 0, 0)     // stop
+#define HEAD_COLOR    CRGB(180, 180, 180) // przód (opcjonalnie)
+
+CRGB leds[NUM_LEDS];
+
+bool blinkState = false;
+
+void updateBlink() {
+  if (millis() - lastBlink > 500) {
+    lastBlink = millis();
+    blinkState = !blinkState;
+  }
+}
+
+void fillLight(int start, int size, CRGB color) {
+  for (int i = 0; i < size; i++) {
+    leds[start + i] = color;
+  }
+}
+
+void drawRearLights() {
+  // pozycja
+  if (lowOn || highOn )
+    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, TAIL_COLOR);
+  else
+    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, 0);
+
+  // stop = jaśniej
+  if (brakeOn) {
+    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, BRAKE_COLOR);
+  }
+
+  // kierunki / awaryjne
+  if (blinkState) {
+    if (hazardRequested || leftRequested)
+      fillLight(LEFT_REAR_START, DIR_REAR_SIZE, TURN_COLOR);
+
+    if (hazardRequested || rightRequested)
+      fillLight(RIGHT_REAR_START, DIR_REAR_SIZE, TURN_COLOR);
+  }
+}
+
+void updateLights() {
+  FastLED.clear();
+
+  updateBlink();
+  drawRearLights();
+  //drawFrontLights();   // możesz wykomentować
+
+  FastLED.show();
+}
+
+void updateLights_min() {
+  //FastLED_min<LED_PIN>.clear(); 
+
+  updateBlink();
+  drawRearLights();
+  //drawFrontLights();   // możesz wykomentować
+
+  //FastLED_min<LED_PIN>.show(); 
+}
+
+
+void LedsSetup() {
+  //FASTLED_MIN_SETUP(LED_PIN, leds, NUM_LEDS);
+  //FastLED_min<LED_PIN>.setBrightness(70);
+
+  FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS); 
+
+  //FastLED.setExclusiveDriver("RMT");
+
+  for(int ii=0; ii<NUM_LEDS;ii++) {
+    leds[ii] = CRGB(255, ii*5, 0);
+  }
+  //FastLED_min<LED_PIN>.show();
+  FastLED.show();
+  delay(1000);
+  for(int ii=0; ii<NUM_LEDS;ii++) {
+    leds[ii] = CRGB(0, 255, 0);
+  }
+  //FastLED_min<LED_PIN>.show(); 
+  FastLED.show();
+  delay(1000);
+  for(int ii=0; ii<NUM_LEDS;ii++) {
+    leds[ii] = CRGB(0, 0, 255);
+  }
+  //FastLED_min<LED_PIN>.show();
+  FastLED.show();
+  delay(1000);
+}
+
 
 // --- Funkcje toggle ---
 void toggleLeft()   { leftRequested = !leftRequested; Serial.println(leftRequested ? "Kierunkowskaz lewy WŁ." : "WYŁ."); }
@@ -135,15 +246,17 @@ void setup() {
 
   setupRoutes();
   server.begin();
+
+  LedsSetup();
 }
 
 void loop() {
   server.handleClient();
 
   // --- Miganie ---
-  unsigned long now = millis();
-  if (now - lastBlink >= blinkInterval) {
-    lastBlink = now;
+  // unsigned long now = millis();
+  // if (now - lastBlink >= blinkInterval) {
+  //   lastBlink = now;
 
     if (hazardRequested) {
       leftOn = !leftOn;
@@ -154,5 +267,12 @@ void loop() {
       if (leftRequested) leftOn = !leftOn; else leftOn = false;
       if (rightRequested) rightOn = !rightOn; else rightOn = false;
     }
-  }
+
+
+    static unsigned long last = 0;
+    if (millis() - last > 30) {
+      last = millis();
+      updateLights();
+    }
+
 }
