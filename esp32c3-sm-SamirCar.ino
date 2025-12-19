@@ -42,7 +42,7 @@ const unsigned long blinkInterval = 500; // 500ms = 1Hz
 #define LIGHT_SIZE        4
 
 #define TURN_COLOR    CRGB(255, 120, 0)   // pomarańcz
-#define TAIL_COLOR    CRGB(80, 0, 0)      // ciemna czerwień
+#define TAIL_COLOR    CRGB(60, 0, 0)      // ciemna czerwień
 #define BRAKE_COLOR   CRGB(255, 0, 0)     // stop
 #define HEAD_COLOR    CRGB(180, 180, 180) // przód (opcjonalnie)
 
@@ -55,6 +55,10 @@ void updateBlink() {
     lastBlink = millis();
     blinkState = !blinkState;
   }
+}
+void resetBlink() {
+  lastBlink = millis();
+  blinkState = true;
 }
 
 void fillLight(int start, int size, CRGB color) {
@@ -136,9 +140,9 @@ void LedsSetup() {
 
 
 // --- Funkcje toggle ---
-void toggleLeft()   { leftRequested = !leftRequested; Serial.println(leftRequested ? "Kierunkowskaz lewy WŁ." : "WYŁ."); }
-void toggleRight()  { rightRequested = !rightRequested; Serial.println(rightRequested ? "Kierunkowskaz prawy WŁ." : "WYŁ."); }
-void toggleHazard() { hazardRequested = !hazardRequested; Serial.println(hazardRequested ? "Światła awaryjne WŁ." : "WYŁ."); }
+void toggleLeft()   { leftRequested = !leftRequested; rightRequested = false; resetBlink(); Serial.println(leftRequested ? "Kierunkowskaz lewy WŁ." : "WYŁ."); }
+void toggleRight()  { rightRequested = !rightRequested; leftRequested = false; resetBlink(); Serial.println(rightRequested ? "Kierunkowskaz prawy WŁ." : "WYŁ."); }
+void toggleHazard() { hazardRequested = !hazardRequested; resetBlink(); Serial.println(hazardRequested ? "Światła awaryjne WŁ." : "WYŁ."); }
 void toggleHigh()   { highOn = !highOn; Serial.println(highOn ? "Światła drogowe WŁ." : "WYŁ."); }
 void toggleLow()    { lowOn = !lowOn; Serial.println(lowOn ? "Światła mijania WŁ." : "WYŁ."); }
 void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "OFF"); }
@@ -173,6 +177,11 @@ void handleRoot() {
     display: flex;
     gap: 20px;
     justify-content: center;
+  }
+
+  .title {
+    font-size: 50px;
+    color: antiquewhite;
   }
 
   button {
@@ -220,7 +229,9 @@ void handleRoot() {
 
 <body>
 <div class="panel">
-
+  <div class="row title">
+  SamirCar
+  </div>
   <!-- RZĄD 1: kierunki + awaryjne -->
   <div class="row">
     <button id="left" class="on-left" onclick="send('left')">
@@ -283,26 +294,55 @@ void handleRoot() {
   </div>
 
     <script>
+      let state = {};
+      let blinkPhase = false;
+
       function send(control) {
         fetch('/' + control);
       }
 
-      async function updateState() {
+      async function fetchState() {
         try {
           const resp = await fetch('/state');
-          const data = await resp.json();
+          state = await resp.json();
 
-          document.getElementById('left').className = data.left ? 'active-left' : 'left';
-          document.getElementById('right').className = data.right ? 'active-right' : 'right';
-          document.getElementById('hazard').className = data.hazard ? 'active-hazard' : 'hazard';
-          document.getElementById('high').className = data.high ? 'active-high' : 'high';
-          document.getElementById('low').className = data.low ? 'active-low' : 'low';
-          document.getElementById('stop').className = data.brake ? 'active-stop' : 'stop';
+          //document.getElementById('left').className = state.left ? 'on-left' : 'left';
+          //document.getElementById('right').className = state.right ? 'on-right' : 'right';
+          //document.getElementById('hazard').className = state.hazard ? 'on-hazard' : 'hazard';
+          //document.getElementById('high').className = state.high ? 'on-high' : 'high';
+          //document.getElementById('low').className = state.low ? 'on-low' : 'low';
+          //document.getElementById('stop').className = state.brake ? 'on-stop' : 'stop';
         } catch(e){ console.log(e); }
       }
 
-      setInterval(updateState, 200);
-      updateState();
+      function render() {
+        setSolid('left', state.left || false);
+        setSolid('right', state.right || false);
+        setSolid('hazard', state.hazard || false);
+
+        setSolid('low', state.low || false);
+        setSolid('high', state.high || false);
+        setSolid('stop', state.brake || false);
+      }
+
+      function setBlink(id, enabled) {
+        const el = document.getElementById(id);
+        el.classList.toggle('on-' + id, enabled && blinkPhase);
+      }
+
+      function setSolid(id, enabled) {
+        const el = document.getElementById(id);
+        el.classList.toggle('on-' + id, enabled);
+      }
+
+
+      setInterval(fetchState, 50);
+      fetchState();
+
+      setInterval(() => {
+        blinkPhase = !blinkPhase;
+        render();
+      }, 50);
     </script>
   </body>
   </html>
@@ -314,9 +354,9 @@ void handleRoot() {
 // --- API JSON ---
 void handleState() {
   String json = "{";
-  json += "\"left\":" + String(leftOn ? "true" : "false") + ",";
-  json += "\"right\":" + String(rightOn ? "true" : "false") + ",";
-  json += "\"hazard\":" + String(hazardOn ? "true" : "false") + ",";
+  json += "\"left\":" + String(leftRequested && blinkState ? "true" : "false") + ",";
+  json += "\"right\":" + String(rightRequested && blinkState ? "true" : "false") + ",";
+  json += "\"hazard\":" + String(hazardRequested && blinkState ? "true" : "false") + ",";
   json += "\"high\":" + String(highOn ? "true" : "false") + ",";
   json += "\"low\":" + String(lowOn ? "true" : "false") + ",";
   json += "\"brake\":" + String(brakeOn ? "true" : "false");
@@ -355,17 +395,6 @@ void loop() {
   // unsigned long now = millis();
   // if (now - lastBlink >= blinkInterval) {
   //   lastBlink = now;
-
-    if (hazardRequested) {
-      leftOn = !leftOn;
-      rightOn = leftOn;
-      hazardOn = leftOn;
-    } else {
-      hazardOn = false;
-      if (leftRequested) leftOn = !leftOn; else leftOn = false;
-      if (rightRequested) rightOn = !rightOn; else rightOn = false;
-    }
-
 
     static unsigned long last = 0;
     if (millis() - last > 30) {
