@@ -146,46 +146,144 @@ void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "
 // --- Strona HTML ---
 void handleRoot() {
   String html = R"rawliteral(
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="UTF-8">
-    <title>Mini kokpit samochodu</title>
-    <style>
-      body { font-family: "Arial", "Verdana", "Tahoma", "Sans-Serif"; }
-      button {
-        width: 160px; height: 60px; font-size: 16px; margin: 10px; border: none; color: white; cursor: pointer;
-        border-radius: 8px;
-      }
-      .left { background-color: gray; }
-      .right { background-color: gray; }
-      .hazard { background-color: gray; }
-      .high { background-color: gray; }
-      .low { background-color: gray; }
-      .stop { background-color: gray; }
-      .active-left { background-color: orange; animation: blink 1s infinite; }
-      .active-right { background-color: orange; animation: blink 1s infinite; }
-      .active-hazard { background-color: orange; animation: blink 1s infinite; }
-      .active-high { background-color: white; color: black; }
-      .active-low { background-color: lightgray; color: black; }
-      .active-stop { background-color: red; }
-      @keyframes blink { 50% { opacity: 0; } 100% { opacity: 1; } }
-    </style>
-  </head>
-  <body>
-    <h1>Mini kokpit samochodu</h1>
-    <button id="left" class="left" onclick="toggle('left')">Kierunkowskaz lewy</button>
-    <button id="right" class="right" onclick="toggle('right')">Kierunkowskaz prawy</button>
-    <br>
-    <button id="hazard" class="hazard" onclick="toggle('hazard')">Światła awaryjne</button>
-    <br>
-    <button id="high" class="high" onclick="toggle('high')">Światła drogowe</button>
-    <button id="low" class="low" onclick="toggle('low')">Światła mijania</button>
-    <br>
-    <button id="stop" class="stop" onclick="toggle('stop')">Stop / Hamulec</button>
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    align-items: center;
+  }
+
+  .row {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+  }
+
+  button {
+    background: #222;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    width: 72px;
+    height: 72px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  svg {
+    width: 48px;
+    height: 48px;
+    fill: #000;
+  }
+
+  /* ===== PODŚWIETLENIA ===== */
+
+  .on-left svg,
+  .on-right svg {
+    fill: #00ff66;
+  }
+
+  .on-hazard svg {
+    fill: #ff3333;
+  }
+
+  .on-low svg {
+    fill: #00ff66;
+  }
+
+  .on-high svg {
+    fill: #3399ff;
+  }
+
+  .on-stop svg {
+    fill: #ff3333;
+  }
+</style>
+</head>
+
+<body>
+<div class="panel">
+
+  <!-- RZĄD 1: kierunki + awaryjne -->
+  <div class="row">
+    <button id="left" class="on-left" onclick="send('left')">
+      <!-- LEWY -->
+      <svg viewBox="0 0 100 100">
+        <polygon points="65,10 15,50 65,90"/>
+      </svg>
+    </button>
+
+    <button id="hazard" onclick="send('hazard')">
+      <!-- AWARYJNE -->
+      <svg viewBox="0 0 100 100">
+        <polygon points="50,10 90,90 10,90"/>
+      </svg>
+    </button>
+
+    <button id="right" onclick="send('right')">
+      <!-- PRAWY -->
+      <svg viewBox="0 0 100 100">
+        <polygon points="35,10 85,50 35,90"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- RZĄD 2: światła -->
+  <div class="row">
+    <button id="low" onclick="send('low')">
+      <!-- MIJANIA -->
+      <svg viewBox="0 0 100 100">
+        <path d="M20 30 H55 L75 50 L55 70 H20 Z"/>
+        <line x1="60" y1="35" x2="85" y2="30" stroke-width="6"/>
+        <line x1="60" y1="50" x2="85" y2="50" stroke-width="6"/>
+        <line x1="60" y1="65" x2="85" y2="70" stroke-width="6"/>
+      </svg>
+    </button>
+
+    <button id="high" onclick="send('high')">
+      <!-- DROGOWE -->
+      <svg viewBox="0 0 100 100">
+        <path d="M20 30 H55 L75 50 L55 70 H20 Z"/>
+        <line x1="60" y1="35" x2="85" y2="35" stroke-width="6"/>
+        <line x1="60" y1="50" x2="85" y2="50" stroke-width="6"/>
+        <line x1="60" y1="65" x2="85" y2="65" stroke-width="6"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- RZĄD 3: STOP -->
+  <div class="row">
+    <button id="stop" onclick="send('stop')">
+      <svg viewBox="0 0 100 100">
+        <polygon points="
+          30,5 70,5
+          95,30 95,70
+          70,95 30,95
+          5,70 5,30
+        "/>
+      </svg>
+    </button>
+  </div>
 
     <script>
-      function toggle(control) {
+      function send(control) {
         fetch('/' + control);
       }
 
