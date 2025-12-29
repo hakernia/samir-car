@@ -2,6 +2,20 @@
 #include <WebServer.h>
 #include <FastLED.h>
 
+/*
+ * This version is for LED strip RGBIC, 90 LEDs/m, 1200 lm, 24W, 24V
+ * It consists of 25 sections x 20 cm
+ * Each section has 6 x WS2812B + 6 x cold white + 6 x warm white
+ * Sections are addressable as follows:
+ * section 1:
+ *     leds[0] = 6 x WS2812B = CRGB(R,G,B)
+ *     leds[1] = 6 x (cold + warm) = CRGB(cold, warm, notused)
+ * section 2:
+ *     leds[2] = 6 x WS2812B = CRGB(R,G,B)
+ *     leds[3] = 6 x (cold + warm) = CRGB(cold, warm, notused)
+ * etc.
+ */
+
 // --- Access Point ---
 const char* apSSID = "SamirCar";
 const char* apPassword = "12345678";
@@ -15,6 +29,9 @@ bool hazardRequested = false;
 bool highOn = false;
 bool lowOn = false;
 bool brakeOn = false;
+
+int testLedNum = 0;  // 0..NUM_LEDS-1
+int testColor = 0;   // 0-black,1-red 2-green,3-blue,4-white
 
 // --- Stany wyjściowe (mruganie) ---
 bool leftOn = false;
@@ -32,19 +49,23 @@ const unsigned long blinkInterval = 500; // 500ms = 1Hz
 #define LED_PIN  4   // bezpieczny pin na C3
 
 #define LEFT_REAR_START   0
-#define RIGHT_REAR_START  3
-#define DIR_REAR_SIZE     1
-#define BRAKE_REAR_START  0
-#define BRAKE_REAR_SIZE   4
+#define RIGHT_REAR_START  9
+#define DIR_REAR_SIZE     2
+#define BRAKE_REAR_START  2
+#define BRAKE_REAR_SIZE   7
 
-#define LEFT_FRONT_START  16
-#define RIGHT_FRONT_START 24
-#define LIGHT_SIZE        4
+#define LEFT_FRONT_START  11
+#define RIGHT_FRONT_START 13
+#define LIGHT_SIZE        2
 
-#define TURN_COLOR    CRGB(255, 120, 0)   // pomarańcz
+#define EVEN  1
+#define ODD   2
+
+#define TURN_COLOR    CRGB(255, 40, 0)   // pomarańcz
 #define TAIL_COLOR    CRGB(60, 0, 0)      // ciemna czerwień
 #define BRAKE_COLOR   CRGB(255, 0, 0)     // stop
-#define HEAD_COLOR    CRGB(180, 180, 180) // przód (opcjonalnie)
+#define LOW_BEAM_COLOR    CRGB(0, 100, 180) // przód (opcjonalnie)
+#define HIGH_BEAM_COLOR    CRGB(180, 0, 0) // przód (opcjonalnie)
 
 CRGB leds[NUM_LEDS];
 
@@ -61,32 +82,58 @@ void resetBlink() {
   blinkState = true;
 }
 
-void fillLight(int start, int size, CRGB color) {
+void fillLight(int start, int size, int evenOddAll, CRGB color) {
+  if(evenOddAll & 1)
   for (int i = 0; i < size; i++) {
-    leds[start + i] = color;
+    leds[start*2 + i*2] = color;
+  }
+  if(evenOddAll & 2)
+  for (int i = 0; i < size; i++) {
+    leds[start*2+1 + i*2] = color;
   }
 }
 
 void drawRearLights() {
   // pozycja
-  if (lowOn || highOn )
-    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, TAIL_COLOR);
-  else
-    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, 0);
+  CRGB frontColor;
+  if(lowOn)
+    frontColor = CRGB(highOn ? 100 : 0, lowOn ? 100 : 0, 0);
+  fillLight(LEFT_FRONT_START,  LIGHT_SIZE, ODD, frontColor);
+  fillLight(RIGHT_FRONT_START,  LIGHT_SIZE, ODD, frontColor);
+
+  if (lowOn || highOn ) {
+    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, EVEN, TAIL_COLOR);
+  }
+  else {
+    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, EVEN, 0);
+  }
 
   // stop = jaśniej
   if (brakeOn) {
-    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, BRAKE_COLOR);
+    fillLight(BRAKE_REAR_START,  BRAKE_REAR_SIZE, EVEN, BRAKE_COLOR);
   }
 
   // kierunki / awaryjne
   if (blinkState) {
     if (hazardRequested || leftRequested)
-      fillLight(LEFT_REAR_START, DIR_REAR_SIZE, TURN_COLOR);
+      fillLight(LEFT_REAR_START, DIR_REAR_SIZE, EVEN, TURN_COLOR);
 
     if (hazardRequested || rightRequested)
-      fillLight(RIGHT_REAR_START, DIR_REAR_SIZE, TURN_COLOR);
+      fillLight(RIGHT_REAR_START, DIR_REAR_SIZE, EVEN, TURN_COLOR);
   }
+/*
+  if(testLedNum >= 0) {
+    CRGB testColorRGB;
+    switch(testColor) {
+      case 0: testColorRGB = CRGB(0, 0, 0); break;
+      case 1: testColorRGB = CRGB(100, 0, 0); break;
+      case 2: testColorRGB = CRGB(0, 100, 0); break;
+      case 3: testColorRGB = CRGB(0, 0, 100); break;
+      case 4: testColorRGB = CRGB(100, 100, 100); break;
+    }
+    fillLight(testLedNum, 1, EVEN, testColorRGB);
+  }
+  */
 }
 
 void updateLights() {
@@ -144,7 +191,9 @@ void toggleLeft()   { leftRequested = !leftRequested; rightRequested = false; re
 void toggleRight()  { rightRequested = !rightRequested; leftRequested = false; resetBlink(); Serial.println(rightRequested ? "Kierunkowskaz prawy WŁ." : "WYŁ."); }
 void toggleHazard() { hazardRequested = !hazardRequested; resetBlink(); Serial.println(hazardRequested ? "Światła awaryjne WŁ." : "WYŁ."); }
 void toggleHigh()   { highOn = !highOn; Serial.println(highOn ? "Światła drogowe WŁ." : "WYŁ."); }
-void toggleLow()    { lowOn = !lowOn; Serial.println(lowOn ? "Światła mijania WŁ." : "WYŁ."); }
+//void toggleHigh()   { testLedNum++; if(testLedNum == NUM_LEDS) testLedNum = 0; Serial.print("testLedNum: "); Serial.println(testLedNum);}
+void toggleLow()    { lowOn = !lowOn; if(lowOn && highOn) highOn = false; Serial.println(lowOn ? "Światła mijania WŁ." : "WYŁ."); }
+//void toggleLow()    { testColor++; if(testColor == 5) testColor = 0; Serial.print("testColor: "); Serial.println(testColor);}
 void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "OFF"); }
 
 // --- Strona HTML ---
