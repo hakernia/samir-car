@@ -30,9 +30,6 @@ bool highOn = false;
 bool lowOn = false;
 bool brakeOn = false;
 
-int testLedNum = 0;  // 0..NUM_LEDS-1
-int testColor = 0;   // 0-black,1-red 2-green,3-blue,4-white
-
 // --- Stany wyjściowe (mruganie) ---
 bool leftOn = false;
 bool rightOn = false;
@@ -42,10 +39,7 @@ bool hazardOn = false;
 unsigned long lastBlink = 0;
 const unsigned long blinkInterval = 500; // 500ms = 1Hz
 
-
-
-
-#define NUM_LEDS 32
+#define NUM_LEDS 50
 #define LED_PIN  4   // bezpieczny pin na C3
 
 #define LEFT_REAR_START   0
@@ -55,8 +49,8 @@ const unsigned long blinkInterval = 500; // 500ms = 1Hz
 #define BRAKE_REAR_SIZE   7
 
 #define LEFT_FRONT_START  11
-#define RIGHT_FRONT_START 13
-#define LIGHT_SIZE        2
+#define RIGHT_FRONT_START 18
+#define LIGHT_SIZE        7
 
 #define EVEN  1
 #define ODD   2
@@ -121,19 +115,6 @@ void drawRearLights() {
     if (hazardRequested || rightRequested)
       fillLight(RIGHT_REAR_START, DIR_REAR_SIZE, EVEN, TURN_COLOR);
   }
-/*
-  if(testLedNum >= 0) {
-    CRGB testColorRGB;
-    switch(testColor) {
-      case 0: testColorRGB = CRGB(0, 0, 0); break;
-      case 1: testColorRGB = CRGB(100, 0, 0); break;
-      case 2: testColorRGB = CRGB(0, 100, 0); break;
-      case 3: testColorRGB = CRGB(0, 0, 100); break;
-      case 4: testColorRGB = CRGB(100, 100, 100); break;
-    }
-    fillLight(testLedNum, 1, EVEN, testColorRGB);
-  }
-  */
 }
 
 void updateLights() {
@@ -146,21 +127,7 @@ void updateLights() {
   FastLED.show();
 }
 
-void updateLights_min() {
-  //FastLED_min<LED_PIN>.clear(); 
-
-  updateBlink();
-  drawRearLights();
-  //drawFrontLights();   // możesz wykomentować
-
-  //FastLED_min<LED_PIN>.show(); 
-}
-
-
 void LedsSetup() {
-  //FASTLED_MIN_SETUP(LED_PIN, leds, NUM_LEDS);
-  //FastLED_min<LED_PIN>.setBrightness(70);
-
   FastLED.addLeds<WS2812, LED_PIN, GRB>(leds, NUM_LEDS); 
 
   //FastLED.setExclusiveDriver("RMT");
@@ -168,33 +135,28 @@ void LedsSetup() {
   for(int ii=0; ii<NUM_LEDS;ii++) {
     leds[ii] = CRGB(255, ii*5, 0);
   }
-  //FastLED_min<LED_PIN>.show();
   FastLED.show();
   delay(1000);
   for(int ii=0; ii<NUM_LEDS;ii++) {
     leds[ii] = CRGB(0, 255, 0);
   }
-  //FastLED_min<LED_PIN>.show(); 
   FastLED.show();
   delay(1000);
   for(int ii=0; ii<NUM_LEDS;ii++) {
     leds[ii] = CRGB(0, 0, 255);
   }
-  //FastLED_min<LED_PIN>.show();
   FastLED.show();
   delay(1000);
 }
 
 
 // --- Funkcje toggle ---
-void toggleLeft()   { leftRequested = !leftRequested; rightRequested = false; resetBlink(); Serial.println(leftRequested ? "Kierunkowskaz lewy WŁ." : "WYŁ."); }
-void toggleRight()  { rightRequested = !rightRequested; leftRequested = false; resetBlink(); Serial.println(rightRequested ? "Kierunkowskaz prawy WŁ." : "WYŁ."); }
-void toggleHazard() { hazardRequested = !hazardRequested; resetBlink(); Serial.println(hazardRequested ? "Światła awaryjne WŁ." : "WYŁ."); }
-void toggleHigh()   { highOn = !highOn; Serial.println(highOn ? "Światła drogowe WŁ." : "WYŁ."); }
-//void toggleHigh()   { testLedNum++; if(testLedNum == NUM_LEDS) testLedNum = 0; Serial.print("testLedNum: "); Serial.println(testLedNum);}
-void toggleLow()    { lowOn = !lowOn; if(lowOn && highOn) highOn = false; Serial.println(lowOn ? "Światła mijania WŁ." : "WYŁ."); }
-//void toggleLow()    { testColor++; if(testColor == 5) testColor = 0; Serial.print("testColor: "); Serial.println(testColor);}
-void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "OFF"); }
+void toggleLeft()   { leftRequested = !leftRequested; rightRequested = false; resetBlink(); Serial.println(leftRequested ? "Left Indicator ON." : "Left Indicator OFF"); }
+void toggleRight()  { rightRequested = !rightRequested; leftRequested = false; resetBlink(); Serial.println(rightRequested ? "Right Indicator ON" : "Right Indicator OFF"); }
+void toggleHazard() { hazardRequested = !hazardRequested; resetBlink(); Serial.println(hazardRequested ? "Hazard ON" : "Hazard OFF"); }
+void toggleHigh()   { highOn = !highOn; Serial.println(highOn ? "High Beam ON" : "High Beam OFF"); }
+void toggleLow()    { lowOn = !lowOn; if(lowOn && highOn) highOn = false; Serial.println(lowOn ? "Low Beam ON" : "Low Beam OFF"); }
+void toggleBrake()  { brakeOn = !brakeOn; Serial.println(brakeOn ? "Stop ON" : "Stop OFF"); }
 
 // --- Strona HTML ---
 void handleRoot() {
@@ -440,15 +402,9 @@ void setup() {
 void loop() {
   server.handleClient();
 
-  // --- Miganie ---
-  // unsigned long now = millis();
-  // if (now - lastBlink >= blinkInterval) {
-  //   lastBlink = now;
-
-    static unsigned long last = 0;
-    if (millis() - last > 30) {
-      last = millis();
-      updateLights();
-    }
-
+  static unsigned long last = 0;
+  if (millis() - last > 30) {
+    last = millis();
+    updateLights();
+  }
 }
